@@ -957,18 +957,20 @@ void renderPage(Page /*page*/,
     const int pvRaw   = gw.hasData ? (int)gw.pvPowerW      : 0;
     const int gridRaw = sh.hasData ? (int)sh.totalActPower  : 0;
 
-    static int      s_pv        = 0;
-    static int      s_grid      = 0;
-    static int      s_house     = 0;
-    static uint32_t s_syncStamp = 0;
+    static int      s_pv           = 0;
+    static int      s_grid         = 0;
+    static int      s_house        = 0;
+    static uint32_t s_syncStamp    = 0;
+    static uint32_t s_shellyStamp  = 0;
     {
+        // Primary: Growatt + Shelly both fresh → freeze all together.
         if (gw.hasData && sh.hasData && gw.lastOkMillis != s_syncStamp) {
-            s_syncStamp = gw.lastOkMillis;
+            s_syncStamp  = gw.lastOkMillis;
+            s_shellyStamp = sh.lastOkMillis;
             s_pv   = pvRaw;
             s_grid = gridRaw;
             const int h = pvRaw + gridRaw;
             if (h >= 0) s_house = h;
-            // else: keep previous house (negative = sync gap, not real)
             // Freeze EMData counters at this sync moment.
             if (sh.hasEnergyData) {
                 s_snapImportWh  = sh.totalImportWh;
@@ -977,6 +979,17 @@ void renderPage(Page /*page*/,
                 s_hasSnap       = true;
             }
             log_i("SYNC pv=%d grid=%d house=%d", s_pv, s_grid, s_house);
+        }
+        // Fallback: Growatt offline (night / inverter sleep) but Shelly
+        // is still delivering data.  PV = 0, House = Grid import.
+        else if (sh.hasData && sh.lastOkMillis != s_shellyStamp) {
+            const uint32_t gwAge = millis() - gw.lastOkMillis;
+            if (!gw.hasData || gwAge > GROWATT_POLL_MS * 3) {
+                s_shellyStamp = sh.lastOkMillis;
+                s_pv    = 0;
+                s_grid  = gridRaw;
+                s_house = gridRaw > 0 ? gridRaw : 0;
+            }
         }
     }
     const int pv    = s_pv;
