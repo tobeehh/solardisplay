@@ -964,10 +964,11 @@ void renderPage(Page /*page*/,
     {
         if (gw.hasData && sh.hasData && gw.lastOkMillis != s_syncStamp) {
             s_syncStamp = gw.lastOkMillis;
-            s_pv    = pvRaw;
-            s_grid  = gridRaw;
-            s_house = pvRaw + gridRaw;
-            if (s_house < 0) s_house = 0;
+            s_pv   = pvRaw;
+            s_grid = gridRaw;
+            const int h = pvRaw + gridRaw;
+            if (h >= 0) s_house = h;
+            // else: keep previous house (negative = sync gap, not real)
             // Freeze EMData counters at this sync moment.
             if (sh.hasEnergyData) {
                 s_snapImportWh  = sh.totalImportWh;
