@@ -11,6 +11,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <SD.h>
+#include <lvgl.h>
 
 #include "config.h"
 #include "settings.h"
@@ -101,7 +102,11 @@ void loop() {
     const uint32_t now = millis();
     if ((now - g_lastHeapLog) >= HEAP_LOG_MS) {
         g_lastHeapLog = now;
-        log_i("heap=%u rssi=%d", ESP.getFreeHeap(), WiFi.RSSI());
+        lv_mem_monitor_t mon;
+        lv_mem_monitor(&mon);
+        log_i("heap=%u rssi=%d lvgl=%d%%used(%uB free)",
+              ESP.getFreeHeap(), WiFi.RSSI(),
+              (int)mon.used_pct, (unsigned)mon.free_size);
     }
 
     // Small yield so WiFi/TCP stacks can breathe.

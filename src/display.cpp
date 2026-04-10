@@ -203,7 +203,27 @@ static bool readTouchRaw(int16_t& xraw, int16_t& yraw, int16_t& zraw) {
     return pressed;
 }
 
+// Re-assert touch SPI pin states.  Blocking HTTP requests or WiFi
+// activity can occasionally corrupt the HSPI bus state.  This is cheap
+// and guarantees a known-good starting point for the next read.
+static void touchSpiRecover() {
+    digitalWrite(TOUCH_CS_PIN, HIGH);
+    s_touchSpi.end();
+    s_touchSpi.begin(TOUCH_SCLK_PIN, TOUCH_MISO_PIN, TOUCH_MOSI_PIN,
+                     TOUCH_CS_PIN);
+    pinMode(TOUCH_CS_PIN, OUTPUT);
+    digitalWrite(TOUCH_CS_PIN, HIGH);
+}
+
 void lvglTouchReadCb(lv_indev_t * /*indev*/, lv_indev_data_t *data) {
+    // Periodically re-init the touch SPI bus to recover from corruption.
+    static uint32_t s_lastTouchRecovery = 0;
+    const uint32_t now = millis();
+    if ((now - s_lastTouchRecovery) >= 60000) {
+        s_lastTouchRecovery = now;
+        touchSpiRecover();
+    }
+
     int16_t xr = 0, yr = 0, zr = 0;
     const bool pressed = readTouchRaw(xr, yr, zr);
 
