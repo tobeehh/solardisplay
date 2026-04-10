@@ -1147,29 +1147,31 @@ void renderPage(Page /*page*/,
         // Uses frozen snapshot values (s_snapImportWh / s_snapExportWh /
         // s_snapETodayKwh) captured at the Growatt sync moment.  All three
         // counters are from the exact same instant → no oscillation.
-        // Recalculate only when the snapshot has changed.
+        // Recalculate whenever any snapshot value changes.
+        static float s_lastSnapImp = -1;
+        static float s_lastSnapExp = -1;
         static float s_lastSnapEtd = -1;
 
         if (s_hasSnap && s_dayCountersLoaded &&
-            s_snapETodayKwh != s_lastSnapEtd) {
+            (s_snapETodayKwh != s_lastSnapEtd ||
+             s_snapImportWh  != s_lastSnapImp ||
+             s_snapExportWh  != s_lastSnapExp)) {
             s_lastSnapEtd = s_snapETodayKwh;
+            s_lastSnapImp = s_snapImportWh;
+            s_lastSnapExp = s_snapExportWh;
 
-            // Compute new deltas; enforce monotonic increase — energy
-            // counters only grow, so daily values can never shrink.
-            // Temporary dips from Growatt cloud lag are suppressed.
-            float newPv  = s_snapETodayKwh - s_dayStartETodayKwh;
-            float newImp = (s_snapImportWh - s_dayStartImportWh) / 1000.0f;
-            float newExp = (s_snapExportWh - s_dayStartExportWh) / 1000.0f;
-            if (newPv  < 0) newPv  = 0;
-            if (newImp < 0) newImp = 0;
-            if (newExp < 0) newExp = 0;
-            if (newPv  > s_dayPvKwh)  s_dayPvKwh  = newPv;
-            if (newImp > s_dayImpKwh) s_dayImpKwh = newImp;
-            if (newExp > s_dayExpKwh) s_dayExpKwh = newExp;
+            // Compute deltas directly from snapshots — no monotonic
+            // constraints.  Snapshot sync ensures all values are from
+            // the same instant, so no oscillation can occur.
+            s_dayPvKwh  = s_snapETodayKwh - s_dayStartETodayKwh;
+            s_dayImpKwh = (s_snapImportWh - s_dayStartImportWh) / 1000.0f;
+            s_dayExpKwh = (s_snapExportWh - s_dayStartExportWh) / 1000.0f;
+            if (s_dayPvKwh  < 0) s_dayPvKwh  = 0;
+            if (s_dayImpKwh < 0) s_dayImpKwh = 0;
+            if (s_dayExpKwh < 0) s_dayExpKwh = 0;
 
-            float newSelf = s_dayPvKwh - s_dayExpKwh;
-            if (newSelf < 0) newSelf = 0;
-            if (newSelf > s_autSelfKwh) s_autSelfKwh = newSelf;
+            s_autSelfKwh = s_dayPvKwh - s_dayExpKwh;
+            if (s_autSelfKwh < 0) s_autSelfKwh = 0;
 
             s_dayHouseKwh = s_autSelfKwh + s_dayImpKwh;
 
