@@ -964,10 +964,13 @@ void renderPage(Page /*page*/,
     {
         if (gw.hasData && sh.hasData && gw.lastOkMillis != s_syncStamp) {
             s_syncStamp = gw.lastOkMillis;
-            s_pv   = pvRaw;
+            // Plausibility: if Shelly reports more export than Growatt
+            // reports PV, Growatt is stale → PV must be at least |export|.
+            const int pv_adj = (gridRaw < 0 && (-gridRaw) > pvRaw)
+                               ? -gridRaw : pvRaw;
+            s_pv   = pv_adj;
             s_grid = gridRaw;
-            const int h = pvRaw + gridRaw;
-            if (h >= 0) s_house = h;
+            s_house = pv_adj + gridRaw;
             // Freeze EMData counters at this sync moment.
             if (sh.hasEnergyData) {
                 s_snapImportWh  = sh.totalImportWh;
@@ -978,10 +981,11 @@ void renderPage(Page /*page*/,
             log_i("SYNC pv=%d grid=%d house=%d", s_pv, s_grid, s_house);
             s_synced = true;
         } else if (!s_synced && (gw.hasData || sh.hasData)) {
-            s_pv   = pvRaw;
+            const int pv_adj = (gridRaw < 0 && (-gridRaw) > pvRaw)
+                               ? -gridRaw : pvRaw;
+            s_pv   = pv_adj;
             s_grid = gridRaw;
-            const int h = pvRaw + gridRaw;
-            if (h >= 0) s_house = h;
+            s_house = pv_adj + gridRaw;
         }
     }
     const int pv    = s_pv;
