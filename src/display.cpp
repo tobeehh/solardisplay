@@ -1170,13 +1170,25 @@ void renderPage(Page /*page*/,
 
             s_dayHouseKwh = s_autSelfKwh + s_dayImpKwh;
 
-            s_autPct = (s_dayHouseKwh > 0.01f)
-                ? (int)(s_autSelfKwh * 100.0f / s_dayHouseKwh) : 0;
-            if (s_autPct > 100) s_autPct = 100;
-            if (s_autPct < 0)   s_autPct = 0;
-            log_i("AUT etd=%.2f pv=%.2f imp=%.2f exp=%.2f self=%.2f house=%.2f aut=%d%%",
+            float rawPct = (s_dayHouseKwh > 0.01f)
+                ? (s_autSelfKwh * 100.0f / s_dayHouseKwh) : 0;
+            if (rawPct > 100) rawPct = 100;
+            if (rawPct < 0)   rawPct = 0;
+
+            // 3-point moving average to smooth Growatt quantization
+            // noise (eTodayKwh has 0.1 kWh steps → ±3% jitter).
+            static float s_autBuf[3] = {0, 0, 0};
+            static int   s_autBufN   = 0;
+            s_autBuf[s_autBufN % 3] = rawPct;
+            s_autBufN++;
+            const int cnt = (s_autBufN < 3) ? s_autBufN : 3;
+            float sum = 0;
+            for (int i = 0; i < cnt; i++) sum += s_autBuf[i];
+            s_autPct = (int)(sum / cnt + 0.5f);
+
+            log_i("AUT etd=%.2f pv=%.2f imp=%.2f exp=%.2f self=%.2f house=%.2f raw=%.1f%% aut=%d%%",
                   s_snapETodayKwh, s_dayPvKwh, s_dayImpKwh, s_dayExpKwh,
-                  s_autSelfKwh, s_dayHouseKwh, s_autPct);
+                  s_autSelfKwh, s_dayHouseKwh, rawPct, s_autPct);
         }
 
         if (s_ovAut && s_dayCountersLoaded) {
