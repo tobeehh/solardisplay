@@ -950,19 +950,24 @@ void renderPage(Page /*page*/,
 
     // ---- Overview ---------------------------------------------------------
     // All three power values (PV, Grid, House) are frozen together at the
-    // PV is frozen at Growatt sync (~60 s cadence) with plausibility
-    // correction.  Grid is always live from Shelly (5 s cadence).
-    // House is derived: House = PV + Grid, so all three are always
-    // mathematically consistent regardless of update cadence mismatch.
-    const int pvRaw  = gw.hasData ? (int)gw.pvPowerW      : 0;
-    const int gridRaw = sh.hasData ? (int)sh.totalActPower : 0;
+    // All three tile values (PV, Grid, House) are frozen at the Growatt
+    // sync moment.  main.cpp forces an immediate Shelly refresh when
+    // Growatt delivers new data, so both snapshots are from the same
+    // instant.  Between syncs nothing changes → no drift, no mismatch.
+    const int pvRaw   = gw.hasData ? (int)gw.pvPowerW      : 0;
+    const int gridRaw = sh.hasData ? (int)sh.totalActPower  : 0;
 
-    static int      s_frozenPv     = 0;
-    static uint32_t s_syncStamp    = 0;
+    static int      s_pv        = 0;
+    static int      s_grid      = 0;
+    static int      s_house     = 0;
+    static uint32_t s_syncStamp = 0;
     {
         if (gw.hasData && sh.hasData && gw.lastOkMillis != s_syncStamp) {
             s_syncStamp = gw.lastOkMillis;
-            s_frozenPv  = pvRaw;
+            s_pv    = pvRaw;
+            s_grid  = gridRaw;
+            s_house = pvRaw + gridRaw;
+            if (s_house < 0) s_house = 0;
             // Freeze EMData counters at this sync moment.
             if (sh.hasEnergyData) {
                 s_snapImportWh  = sh.totalImportWh;
@@ -970,17 +975,12 @@ void renderPage(Page /*page*/,
                 s_snapETodayKwh = gw.eTodayKwh;
                 s_hasSnap       = true;
             }
-            log_i("SYNC pvRaw=%d grid=%d", s_frozenPv, gridRaw);
+            log_i("SYNC pv=%d grid=%d house=%d", s_pv, s_grid, s_house);
         }
     }
-
-    // Plausibility: if exporting more than Growatt PV, Growatt is stale.
-    // PV must be at least |export|.  This self-corrects when Growatt
-    // catches up because pvRaw will then exceed |export|.
-    const int pv    = (gridRaw < 0 && (-gridRaw) > s_frozenPv)
-                      ? -gridRaw : s_frozenPv;
-    const int grid  = gridRaw;       // always live from Shelly
-    const int house = pv + grid;     // derived → always consistent
+    const int pv    = s_pv;
+    const int grid  = s_grid;
+    const int house = s_house;
 
     auto fmtPower = [](lv_obj_t *lbl, int w) {
         if (!lbl) return;
