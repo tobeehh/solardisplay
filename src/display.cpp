@@ -1145,24 +1145,19 @@ void renderPage(Page /*page*/,
 
         // --- Calculate & display ---
         // Uses frozen snapshot values (s_snapImportWh / s_snapExportWh /
-        // s_snapETodayKwh) captured at the Growatt sync moment.  All three
-        // counters are from the exact same instant → no oscillation.
-        // Recalculate whenever any snapshot value changes.
-        static float s_lastSnapImp = -1;
-        static float s_lastSnapExp = -1;
+        // s_snapETodayKwh) captured at the Growatt sync moment.
+        // Only recalculate when eTodayKwh changes (Growatt bottleneck).
+        // Between Growatt updates, Shelly counters grow but PV is stale,
+        // which would cause self=PV-Exp to shrink → Autarkie drift.
         static float s_lastSnapEtd = -1;
 
         if (s_hasSnap && s_dayCountersLoaded &&
-            (s_snapETodayKwh != s_lastSnapEtd ||
-             s_snapImportWh  != s_lastSnapImp ||
-             s_snapExportWh  != s_lastSnapExp)) {
+            s_snapETodayKwh != s_lastSnapEtd) {
             s_lastSnapEtd = s_snapETodayKwh;
-            s_lastSnapImp = s_snapImportWh;
-            s_lastSnapExp = s_snapExportWh;
 
             // Compute deltas directly from snapshots — no monotonic
-            // constraints.  Snapshot sync ensures all values are from
-            // the same instant, so no oscillation can occur.
+            // constraints.  All three values are from the same Growatt
+            // sync instant.
             s_dayPvKwh  = s_snapETodayKwh - s_dayStartETodayKwh;
             s_dayImpKwh = (s_snapImportWh - s_dayStartImportWh) / 1000.0f;
             s_dayExpKwh = (s_snapExportWh - s_dayStartExportWh) / 1000.0f;
